@@ -30,7 +30,10 @@ cp .env.example .env
 cp backend/.env.example backend/.env
 cd backend && php artisan key:generate && cd ..
 docker compose up -d
+docker compose exec backend php artisan migrate --seed
 ```
+
+El seeder crea 2 organizaciones independientes ("Northwind Logistics", "Blue Harbor Retail"), cada una con un usuario Administrator, Manager y Member (contraseña `password` para todos — ver la lista completa en la pantalla de login). Tener dos organizaciones desde el arranque es intencional: permite comprobar a simple vista que una nunca ve los datos de la otra.
 
 Puertos expuestos en el host (remapeados para no chocar con otros stacks Docker que puedan estar corriendo en la misma máquina — ajusta si tu entorno está libre en los puertos "por defecto"):
 
@@ -66,33 +69,38 @@ npm run build              # incluye type-check con vue-tsc
 ## Principales decisiones
 
 - Backend y frontend desacoplados (API + SPA), autenticados con Laravel Sanctum en modo SPA-stateful — [ADR 0002](docs/adr/0002-decoupled-api-and-spa.md)
-- Multi-tenancy por base de datos compartida con aislamiento por fila (`organization_id` + Global Scope), no por base de datos separada — [ADR 0003](docs/adr/0003-multi-tenancy-strategy.md)
+- Multi-tenancy por base de datos compartida con aislamiento por fila (`organization_id` + Global Scope), no por base de datos separada — [ADR 0003](docs/adr/0003-multi-tenancy-strategy.md) (incluye una enmienda importante: `User` queda excluido del scope automático para evitar una recursión infinita al autenticar — es un bug real que apareció y se corrigió en la Sesión 2)
 - Versiones de stack elegidas según el entorno disponible, no por ser las más recientes — [ADR 0001](docs/adr/0001-stack-selection.md)
+- Nginx + PHP-FPM en vez de `php artisan serve` — [ADR 0004](docs/adr/0004-nginx-php-fpm-over-artisan-serve.md)
 
 ## Estado del proyecto
 
-**Sesión 1 de 5 completada: arquitectura y estructura.**
+**Sesión 2 de 5 completada: primer flujo vertical funcional.**
 
-Funciona realmente, verificado en esta máquina:
-- `docker compose up -d` levanta MySQL, RabbitMQ, backend, worker de colas y frontend, todos sanos (`healthy`/`Up`).
-- Backend responde en `/up` (health check de Laravel) y ejecuta sus migraciones base automáticamente al arrancar.
-- Worker de colas conectado a RabbitMQ (aún sin jobs de negocio que consumir — eso es la Sesión 2).
-- Frontend sirve la SPA base de Vue 3 + TypeScript vía Vite.
-- Suites de test base pasan: `./vendor/bin/pest` (backend, Pest) y `npm run test:unit` (frontend, Vitest).
-- Lint y build limpios en ambos proyectos (`pint --test`, `eslint`/`oxlint`, `vue-tsc --build`, `vite build`).
+Funciona realmente, verificado contra el stack de Docker (no solo con tests automatizados):
+- Dominio completo: `Organization`, `User` (rol Administrator/Manager/Member), `Request` (Draft → Open → In progress → Resolved/reabierta → Closed), `Comment`, `RequestStatusHistory`, `Notification`.
+- Login/logout real contra Sanctum (cookie de sesión + CSRF), sin registro público — los usuarios se siembran o los crea un Administrator.
+- API de solicitudes: crear, listar (filtrado por organización automáticamente), ver detalle con comentarios e historial, comentar, cambiar de estado (con validación de transición y registro en el historial).
+- Autorización por rol vía `RequestPolicy`: cualquiera puede crear/comentar/ver; solo Administrator, Manager, o el usuario asignado, pueden cambiar el estado.
+- **Flujo asíncrono real**: crear una solicitud despacha un job a RabbitMQ; el `queue-worker` (proceso independiente, sin intervención manual) lo consume y genera notificaciones para los interesados — verificado end-to-end repetidas veces.
+- Datos de demo reproducibles: 2 organizaciones, 3 usuarios cada una, varias solicitudes en distintos estados.
+- 14 tests Pest (login/logout, aislamiento básico entre organizaciones, CRUD de solicitudes, transiciones de estado, autorización) + 6 tests Vitest en frontend. Lint y build limpios en ambos proyectos.
+- Un bug real de arquitectura (recursión infinita al autenticar) apareció y se corrigió durante esta sesión — ver la enmienda del [ADR 0003](docs/adr/0003-multi-tenancy-strategy.md). Se documenta explícitamente porque los tests automatizados **no** lo detectaron; solo la verificación manual contra Docker lo hizo.
 
 Pendiente / todavía simulado:
-- No existen aún modelos de dominio (`Organization`, `Request`, roles, etc.) — Sesión 2.
-- No hay flujo de autenticación real ni pantallas más allá del scaffold por defecto de Vue — Sesión 2.
-- Tests de aislamiento multi-tenant, autorización por rol y manejo de errores — Sesión 3.
-- Documentación de gestión de proyecto (charter, RACI, riesgos, SLO/SLA, runbooks) — Sesión 4, algunos ADR ya adelantados.
-- Feature flags, notificaciones con reintentos/dead-letter, dashboard operativo — Sesiones 2–3.
+- Tests adversariales de aislamiento multi-tenant (intentar acceder a datos de otra organización a propósito) y de casos de error — Sesión 3.
+- Feature flag y health checks de liveness/readiness explícitos (hoy solo existe `/up`) — Sesión 3.
+- Dead-letter explícito para la cola (hoy los jobs fallidos van a `failed_jobs`, que cubre el mismo propósito de forma más simple) — se revisará en Sesión 3 si hace falta más.
+- Gestión de usuarios desde la UI (crear/editar usuarios de tu organización) — no implementado; los usuarios existen vía seeder.
+- Dashboard operativo (abiertas, tiempo medio de resolución, errores recientes, cola pendiente) — Sesión 3.
+- Documentación de gestión de proyecto (charter, RACI, riesgos, SLO/SLA, runbooks) — Sesión 4.
 
 ## Limitaciones conocidas
 
-- El contenedor del backend usa `php artisan serve` (adecuado para desarrollo, no para producción — ver `docs/architecture.md`).
 - Node local es 22.12.0; el scaffold de Vue pide `^22.18.0`. Funciona con avisos no bloqueantes; se recomienda actualizar Node antes de un uso prolongado.
 - Los puertos de host en `docker-compose.yml` están remapeados (3307, 5673, 15673, 5174) porque el entorno de desarrollo ya tenía otro stack Docker ocupando los puertos por defecto. Ajusta `docker-compose.yml` si tu máquina los tiene libres.
+- El aislamiento multi-tenant de `User` es manual, no automático — ver la enmienda del ADR 0003 antes de tocar ese modelo.
+- La verificación del flujo en pantalla durante esta sesión se hizo por HTTP directo (`curl`, replicando las cabeceras/cookies exactas de la SPA), no haciendo clic en un navegador — el navegador embebido de la herramienta de desarrollo usada bloquea peticiones `fetch`/XHR entre puertos de `localhost` (confirmado, no es un bug de la app). Abre `http://localhost:5174` en tu navegador habitual para verlo funcionar de extremo a extremo con clics reales.
 
 ## Próximos pasos
 

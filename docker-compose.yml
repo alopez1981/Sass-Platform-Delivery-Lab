@@ -39,8 +39,6 @@ services:
     restart: unless-stopped
     volumes:
       - ./backend:/var/www/html
-    ports:
-      - "8000:8000"
     env_file:
       - ./backend/.env
     depends_on:
@@ -48,7 +46,18 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: sh -c "php artisan migrate --force && php artisan serve --host=0.0.0.0 --port=8000"
+    command: sh -c "php artisan migrate --force && php-fpm"
+
+  webserver:
+    image: nginx:1.27-alpine
+    restart: unless-stopped
+    volumes:
+      - ./backend:/var/www/html
+      - ./backend/docker/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "8000:80"
+    depends_on:
+      - backend
 
   queue-worker:
     build: ./backend
@@ -62,7 +71,9 @@ services:
         condition: service_healthy
       rabbitmq:
         condition: service_healthy
-    command: php artisan queue:work rabbitmq --tries=3 --backoff=5 --max-time=3600
+    # `migrate` runs here too (it's idempotent) so this worker never races
+    # the `backend` service's own migration on a cold start.
+    command: sh -c "php artisan migrate --force && php artisan queue:work rabbitmq --tries=3 --backoff=5 --max-time=3600"
 
   frontend:
     image: node:22-alpine

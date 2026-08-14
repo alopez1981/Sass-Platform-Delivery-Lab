@@ -1,5 +1,8 @@
 <?php
 
+use App\Enums\UserRole;
+use App\Models\Organization;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -44,7 +47,21 @@ expect()->extend('toBeOne', function () {
 |
 */
 
-function something()
+/**
+ * Creates an Organization with one User per role (Administrator, Manager,
+ * Member). Used across feature tests that need a realistic tenant, and by
+ * the multi-tenant isolation tests that need two independent ones.
+ *
+ * @return array{0: Organization, 1: User, 2: User, 3: User}
+ */
+function makeOrgWithUsers(): array
 {
-    // ..
+    $organization = Organization::factory()->create();
+
+    return [
+        $organization,
+        User::factory()->create(['organization_id' => $organization->id, 'role' => UserRole::Administrator]),
+        User::factory()->create(['organization_id' => $organization->id, 'role' => UserRole::Manager]),
+        User::factory()->create(['organization_id' => $organization->id, 'role' => UserRole::Member]),
+    ];
 }

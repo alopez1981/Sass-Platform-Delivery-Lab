@@ -100,13 +100,12 @@ return [
                     'vhost' => env('RABBITMQ_VHOST', '/'),
                 ],
             ],
-            'options' => [
-                'queue' => [
-                    'exchange' => env('RABBITMQ_EXCHANGE', 'saas_lab'),
-                    'exchange_type' => 'direct',
-                    'exchange_routing_key' => '',
-                ],
-            ],
+            // No custom exchange: messages publish straight to a queue named
+            // after the job's queue (default: "default"), which the package
+            // auto-declares for both producer and consumer. A custom
+            // exchange requires manually declaring the queue/binding
+            // yourself (see package README) — unnecessary for this app's
+            // single-queue use case.
             'queue' => env('RABBITMQ_QUEUE', 'default'),
         ],
 
