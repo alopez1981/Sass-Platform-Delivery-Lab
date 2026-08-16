@@ -2,6 +2,29 @@
 
 Proyecto de portfolio que demuestra criterio de arquitectura y gestión de entrega en una plataforma SaaS multi-tenant, sin sobredimensionar la solución.
 
+## TL;DR
+
+Plataforma SaaS multi-tenant pequeña pero real — Laravel 12 + Vue 3 + MySQL + RabbitMQ, en Docker — con **aislamiento entre organizaciones probado con tests adversariales** (no solo asumido), auth + autorización por rol, un flujo asíncrono real de extremo a extremo, feature flags por tenant, health checks, logs estructurados y manejo de errores consistente. 44 tests de backend + 6 de frontend, todos en verde.
+
+```bash
+cp .env.example .env && cp backend/.env.example backend/.env
+cd backend && php artisan key:generate && cd ..
+docker compose up -d
+docker compose exec backend php artisan migrate --seed
+```
+
+Abre `http://localhost:5174` y entra con `admin@northwind.test` / `password` (más detalle en [Cómo ejecutar el proyecto](#cómo-ejecutar-el-proyecto)).
+
+## Capturas
+
+| Login | Solicitudes |
+|---|---|
+| ![Login](docs/screenshots/login.png) | ![Listado de solicitudes](docs/screenshots/requests-list.png) |
+
+| Detalle de solicitud | Dashboard (Administrator) |
+|---|---|
+| ![Detalle de solicitud](docs/screenshots/request-detail.png) | ![Dashboard operativo](docs/screenshots/dashboard.png) |
+
 ## Resumen ejecutivo
 
 Una autoescuela u organización similar necesita coordinar solicitudes operativas internas (incidencias, peticiones de mantenimiento, tareas entre equipos) por organización, con trazabilidad de quién hizo qué y cuándo, y sin que una organización pueda ver los datos de otra. Este laboratorio construye una versión pequeña pero real de esa plataforma para demostrar decisiones de arquitectura, seguridad y entrega — no para venderse como producto.
