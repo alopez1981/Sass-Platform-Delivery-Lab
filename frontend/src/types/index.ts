@@ -61,3 +61,15 @@ export interface AppNotification {
   read_at: string | null
   created_at: string
 }
+
+export interface DashboardData {
+  requests_by_status: Record<RequestStatus, number> & { total: number }
+  avg_resolution_hours: number | null
+  recent_errors: { exception: string; failed_at: string }[]
+  pending_queue_jobs: number | null
+}
+
+export interface FeatureFlag {
+  key: string
+  active: boolean
+}

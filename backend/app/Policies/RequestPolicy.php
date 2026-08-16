@@ -2,9 +2,12 @@
 
 namespace App\Policies;
 
+use App\Enums\RequestStatus;
 use App\Enums\UserRole;
+use App\Features\MembersCanCloseOwnRequests;
 use App\Models\Request;
 use App\Models\User;
+use Laravel\Pennant\Feature;
 
 /**
  * Tenant isolation (can user A even reach organization B's request) is
@@ -34,13 +37,22 @@ class RequestPolicy
         return $user->organization_id === $request->organization_id;
     }
 
-    public function changeStatus(User $user, Request $request): bool
+    public function changeStatus(User $user, Request $request, RequestStatus $newStatus): bool
     {
         if ($user->organization_id !== $request->organization_id) {
             return false;
         }
 
-        return in_array($user->role, [UserRole::Administrator, UserRole::Manager], true)
-            || $user->id === $request->assigned_to;
+        if (in_array($user->role, [UserRole::Administrator, UserRole::Manager], true)
+            || $user->id === $request->assigned_to) {
+            return true;
+        }
+
+        // Progressive rollout example (see App\Features\MembersCanCloseOwnRequests):
+        // when active for this organization, a Member may close a request
+        // they created themselves, even without being the assignee.
+        return $newStatus === RequestStatus::Closed
+            && $user->id === $request->created_by
+            && Feature::for($user->organization)->active(MembersCanCloseOwnRequests::class);
     }
 }

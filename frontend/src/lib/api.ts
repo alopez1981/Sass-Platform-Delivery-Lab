@@ -1,6 +1,12 @@
 import axios from 'axios'
 
-const baseURL = import.meta.env.VITE_API_URL ?? 'http://localhost:8000'
+// Empty by default: requests go to the SPA's own origin (e.g.
+// http://localhost:5174/api/...), which Vite's dev server proxies
+// server-side to the real backend (see vite.config.ts). From the browser's
+// point of view this is same-origin — no CORS, no cross-origin cookie
+// concerns. Set VITE_API_URL only if you deliberately want the browser
+// itself to call a different origin directly (bypassing the proxy).
+const baseURL = import.meta.env.VITE_API_URL ?? ''
 
 export const api = axios.create({
   baseURL,

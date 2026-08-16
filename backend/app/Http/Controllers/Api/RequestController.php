@@ -13,6 +13,8 @@ class RequestController extends Controller
 {
     public function index(HttpRequest $request)
     {
+        $this->authorize('viewAny', OperationalRequest::class);
+
         $requests = OperationalRequest::query()
             ->with(['creator:id,name', 'assignee:id,name'])
             ->latest()
@@ -28,7 +30,13 @@ class RequestController extends Controller
         $data = $request->validate([
             'title' => ['required', 'string', 'max:255'],
             'description' => ['nullable', 'string'],
-            'assigned_to' => ['nullable', 'integer', 'exists:users,id'],
+            'assigned_to' => [
+                'nullable',
+                'integer',
+                // Cannot just be "exists:users,id" — that would let you
+                // assign a request to a user in a *different* organization.
+                Rule::exists('users', 'id')->where('organization_id', $request->user()->organization_id),
+            ],
         ]);
 
         $operationalRequest = OperationalRequest::create([
@@ -61,14 +69,14 @@ class RequestController extends Controller
 
     public function updateStatus(HttpRequest $request, OperationalRequest $operationalRequest)
     {
-        $this->authorize('changeStatus', $operationalRequest);
-
         $data = $request->validate([
             'status' => ['required', Rule::enum(RequestStatus::class)],
         ]);
 
         $newStatus = RequestStatus::from($data['status']);
         $currentStatus = $operationalRequest->status;
+
+        $this->authorize('changeStatus', [$operationalRequest, $newStatus]);
 
         if (! $currentStatus->canTransitionTo($newStatus)) {
             return response()->json([

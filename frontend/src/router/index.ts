@@ -29,6 +29,12 @@ const router = createRouter({
       meta: { requiresAuth: true },
       props: (route) => ({ id: Number(route.params.id) }),
     },
+    {
+      path: '/dashboard',
+      name: 'dashboard',
+      component: () => import('@/views/DashboardView.vue'),
+      meta: { requiresAuth: true, requiresAdministrator: true },
+    },
   ],
 })
 
@@ -44,6 +50,12 @@ router.beforeEach(async (to) => {
   }
 
   if (to.meta.guestOnly && auth.isAuthenticated) {
+    return { name: 'requests' }
+  }
+
+  // A UX nicety only — the API enforces this regardless (see
+  // DashboardController), so there is no security relevance here.
+  if (to.meta.requiresAdministrator && auth.user?.role !== 'administrator') {
     return { name: 'requests' }
   }
 })

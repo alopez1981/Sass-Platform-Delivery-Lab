@@ -98,6 +98,19 @@ it('rejects an invalid status transition', function () {
     expect($request->fresh()->status)->toBe(RequestStatus::Draft);
 });
 
+it('rejects assigning a request to a user from a different organization', function () {
+    [, , $manager] = makeOrgWithUsers();
+    [, $adminOtherOrg] = makeOrgWithUsers();
+
+    $response = $this->actingAs($manager)->postJson('/api/requests', [
+        'title' => 'Try to assign across tenants',
+        'assigned_to' => $adminOtherOrg->id,
+    ]);
+
+    $response->assertUnprocessable()->assertJsonValidationErrors('assigned_to');
+    expect(Request::where('title', 'Try to assign across tenants')->exists())->toBeFalse();
+});
+
 it('forbids a member from changing the status of a request not assigned to them', function () {
     [$organization, , , $member] = makeOrgWithUsers();
     $otherMember = User::factory()->create(['organization_id' => $organization->id, 'role' => UserRole::Member]);

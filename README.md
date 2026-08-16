@@ -72,27 +72,27 @@ npm run build              # incluye type-check con vue-tsc
 - Multi-tenancy por base de datos compartida con aislamiento por fila (`organization_id` + Global Scope), no por base de datos separada — [ADR 0003](docs/adr/0003-multi-tenancy-strategy.md) (incluye una enmienda importante: `User` queda excluido del scope automático para evitar una recursión infinita al autenticar — es un bug real que apareció y se corrigió en la Sesión 2)
 - Versiones de stack elegidas según el entorno disponible, no por ser las más recientes — [ADR 0001](docs/adr/0001-stack-selection.md)
 - Nginx + PHP-FPM en vez de `php artisan serve` — [ADR 0004](docs/adr/0004-nginx-php-fpm-over-artisan-serve.md)
+- Feature flags con Laravel Pennant, escopados por organización (activación progresiva por tenant, no un interruptor global) — ver `docs/architecture.md`
+- Health checks separados (liveness/readiness/application health) y logs estructurados en JSON con correlation ID — ver [`docs/observability.md`](docs/observability.md)
 
 ## Estado del proyecto
 
-**Sesión 2 de 5 completada: primer flujo vertical funcional.**
+**Sesión 3 de 5 completada: seguridad y casos de error.**
 
-Funciona realmente, verificado contra el stack de Docker (no solo con tests automatizados):
-- Dominio completo: `Organization`, `User` (rol Administrator/Manager/Member), `Request` (Draft → Open → In progress → Resolved/reabierta → Closed), `Comment`, `RequestStatusHistory`, `Notification`.
-- Login/logout real contra Sanctum (cookie de sesión + CSRF), sin registro público — los usuarios se siembran o los crea un Administrator.
-- API de solicitudes: crear, listar (filtrado por organización automáticamente), ver detalle con comentarios e historial, comentar, cambiar de estado (con validación de transición y registro en el historial).
-- Autorización por rol vía `RequestPolicy`: cualquiera puede crear/comentar/ver; solo Administrator, Manager, o el usuario asignado, pueden cambiar el estado.
-- **Flujo asíncrono real**: crear una solicitud despacha un job a RabbitMQ; el `queue-worker` (proceso independiente, sin intervención manual) lo consume y genera notificaciones para los interesados — verificado end-to-end repetidas veces.
-- Datos de demo reproducibles: 2 organizaciones, 3 usuarios cada una, varias solicitudes en distintos estados.
-- 14 tests Pest (login/logout, aislamiento básico entre organizaciones, CRUD de solicitudes, transiciones de estado, autorización) + 6 tests Vitest en frontend. Lint y build limpios en ambos proyectos.
-- Un bug real de arquitectura (recursión infinita al autenticar) apareció y se corrigió durante esta sesión — ver la enmienda del [ADR 0003](docs/adr/0003-multi-tenancy-strategy.md). Se documenta explícitamente porque los tests automatizados **no** lo detectaron; solo la verificación manual contra Docker lo hizo.
+Funciona realmente, verificado con tests automatizados (44 backend + 6 frontend, todos pasando):
+- **Aislamiento multi-tenant probado, no solo asumido**: `tests/Feature/TenantIsolationTest.php` intenta activamente que un usuario de una organización lea/comente/cambie el estado de recursos de otra por ID directo, y comprueba que siempre da 404 (nunca 403, para no confirmar que el recurso existe). `tests/Unit/TenantScopingArchitectureTest.php` impide que un modelo nuevo con `organization_id` se cree sin heredar el aislamiento automático.
+- Validación reforzada: ya no se puede asignar una solicitud a un usuario de otra organización (antes solo se comprobaba que el usuario existiera, no a qué organización pertenecía).
+- **Feature flag real** con Laravel Pennant, escopado por organización: un Administrator puede activar "los Members pueden cerrar sus propias solicitudes" solo para su organización, sin afectar a las demás.
+- **Tres health checks** distintos según quién los consume: `/api/health/live` (¿vive el proceso?), `/api/health/ready` (¿puede atender tráfico? — comprueba BD y cache de verdad), `/api/health/app` (vista humana, añade RabbitMQ y versión).
+- **Logs estructurados en JSON** con correlation ID por petición (reutilizado si el cliente ya manda uno, propagado automáticamente incluso a los jobs en cola).
+- **Errores consistentes**: toda la API responde en JSON aunque el cliente no lo pida explícitamente; login limitado a 5 intentos/minuto por IP.
+- **Dashboard operativo** (`/api/dashboard`, solo Administrator): solicitudes por estado, tiempo medio de resolución, errores recientes (sin exponer nunca el payload de los jobs fallidos, solo la excepción), trabajos pendientes en cola. Con una pantalla mínima en la SPA.
+- **Verificación en navegador real, con clics** (login, listado, dashboard, activar/desactivar un feature flag) — se añadió un proxy de desarrollo en Vite (`vite.config.ts`) que resuelve la limitación de la Sesión 2 (el navegador de la herramienta de desarrollo bloqueaba peticiones entre puertos de `localhost`), y de paso simplifica el CORS en local. Detalle en `docs/architecture.md`.
+- Un hueco real de seguridad encontrado y corregido esta sesión: la validación de "asignar a" no comprobaba la organización del usuario asignado — ver `tests/Feature/RequestTest.php`.
 
 Pendiente / todavía simulado:
-- Tests adversariales de aislamiento multi-tenant (intentar acceder a datos de otra organización a propósito) y de casos de error — Sesión 3.
-- Feature flag y health checks de liveness/readiness explícitos (hoy solo existe `/up`) — Sesión 3.
-- Dead-letter explícito para la cola (hoy los jobs fallidos van a `failed_jobs`, que cubre el mismo propósito de forma más simple) — se revisará en Sesión 3 si hace falta más.
 - Gestión de usuarios desde la UI (crear/editar usuarios de tu organización) — no implementado; los usuarios existen vía seeder.
-- Dashboard operativo (abiertas, tiempo medio de resolución, errores recientes, cola pendiente) — Sesión 3.
+- El rate limiting de login es por IP, no por cuenta — un ataque distribuido no quedaría cubierto.
 - Documentación de gestión de proyecto (charter, RACI, riesgos, SLO/SLA, runbooks) — Sesión 4.
 
 ## Limitaciones conocidas
@@ -100,7 +100,7 @@ Pendiente / todavía simulado:
 - Node local es 22.12.0; el scaffold de Vue pide `^22.18.0`. Funciona con avisos no bloqueantes; se recomienda actualizar Node antes de un uso prolongado.
 - Los puertos de host en `docker-compose.yml` están remapeados (3307, 5673, 15673, 5174) porque el entorno de desarrollo ya tenía otro stack Docker ocupando los puertos por defecto. Ajusta `docker-compose.yml` si tu máquina los tiene libres.
 - El aislamiento multi-tenant de `User` es manual, no automático — ver la enmienda del ADR 0003 antes de tocar ese modelo.
-- La verificación del flujo en pantalla durante esta sesión se hizo por HTTP directo (`curl`, replicando las cabeceras/cookies exactas de la SPA), no haciendo clic en un navegador — el navegador embebido de la herramienta de desarrollo usada bloquea peticiones `fetch`/XHR entre puertos de `localhost` (confirmado, no es un bug de la app). Abre `http://localhost:5174` en tu navegador habitual para verlo funcionar de extremo a extremo con clics reales.
+- "Errores recientes" y "cola pendiente" en el dashboard son señales de infraestructura compartidas por toda la app (no hay concepto de tenant en `failed_jobs` ni en la profundidad de la cola) — simplificación consciente, no un descuido de aislamiento.
 
 ## Próximos pasos
 
@@ -109,5 +109,6 @@ Ver tabla de sesiones y entregables en la introducción de este proyecto (conver
 ## Documentación
 
 - [`docs/architecture.md`](docs/architecture.md)
+- [`docs/observability.md`](docs/observability.md) — health checks, logs estructurados, manejo de errores
 - [`docs/adr/`](docs/adr/)
 - El resto de documentos de gestión (`docs/project-charter.md`, `docs/scope.md`, `docs/risk-register.md`, `docs/slo.md`, etc.) se añaden en la Sesión 4.

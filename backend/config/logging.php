@@ -1,5 +1,6 @@
 <?php
 
+use Monolog\Formatter\JsonFormatter;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -63,6 +64,11 @@ return [
             'path' => storage_path('logs/laravel.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'replace_placeholders' => true,
+            // JSON, not the default plain-text line: every entry carries the
+            // current Log Context (correlation_id, user_id — see
+            // App\Http\Middleware\LogRequests) as structured fields instead
+            // of free text, so logs are actually queryable/filterable.
+            'formatter' => JsonFormatter::class,
         ],
 
         'daily' => [

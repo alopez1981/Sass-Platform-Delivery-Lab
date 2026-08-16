@@ -26,6 +26,7 @@ async function handleLogout() {
     </div>
     <nav>
       <RouterLink to="/">Requests</RouterLink>
+      <RouterLink v-if="auth.user.role === 'administrator'" to="/dashboard">Dashboard</RouterLink>
       <span title="Unread notifications">🔔 {{ notifications.unreadCount }}</span>
       <button class="btn" @click="handleLogout">Log out</button>
     </nav>
