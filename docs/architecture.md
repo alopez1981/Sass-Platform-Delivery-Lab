@@ -66,7 +66,7 @@ Un feature flag de ejemplo (`App\Features\MembersCanCloseOwnRequests`, vía [Lar
 | Tests automatizados (backend) | `./vendor/bin/pest` (fuera de Docker) | SQLite en memoria (`phpunit.xml`) | Driver `sync` (sin cola real) |
 | Tests automatizados (frontend) | `npm run test:unit` (Vitest) | N/A | N/A |
 
-Ver `docs/environment-strategy.md` (Sesión 4) para el detalle de promoción entre entornos.
+Ver [`environment-strategy.md`](environment-strategy.md) para el detalle de promoción entre entornos.
 
 ## Fuera de alcance (explícito)
 

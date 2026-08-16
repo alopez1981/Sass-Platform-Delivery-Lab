@@ -100,7 +100,13 @@ npm run build              # incluye type-check con vue-tsc
 
 ## Estado del proyecto
 
-**Sesión 3 de 5 completada: seguridad y casos de error.**
+**Sesión 4 de 5 completada: documentación de gestión.**
+
+Se añadió toda la documentación de gestión de proyecto: [`project-charter.md`](docs/project-charter.md) (objetivo de negocio, restricciones, criterios de éxito), [`stakeholder-map.md`](docs/stakeholder-map.md) (stakeholders simulados + matriz RACI), [`scope.md`](docs/scope.md) (alcance, Definition of Ready/Done, criterios de aceptación), [`milestones.md`](docs/milestones.md), [`delivery-plan.md`](docs/delivery-plan.md), [`dependencies.md`](docs/dependencies.md), [`risk-register.md`](docs/risk-register.md) (incluye los riesgos que realmente se materializaron en las Sesiones 2 y 3, no solo hipotéticos), [`environment-strategy.md`](docs/environment-strategy.md), [`deployment-runbook.md`](docs/deployment-runbook.md) y [`rollback-plan.md`](docs/rollback-plan.md) (estrategia documentada, deliberadamente no ejecutada — ver más abajo), y [`slo.md`](docs/slo.md) (SLI/SLO/SLA de ejemplo, error budget, MTTR, separando explícitamente objetivos definidos de métricas simuladas y de lo único observado realmente). Dos diagramas nuevos en [`docs/diagrams/`](docs/diagrams/).
+
+**Decisión de no desplegar**: se evaluaron opciones de despliegue gratuito (Render + CloudAMQP + Clever Cloud + Cloudflare Pages) y se decidió conscientemente no ejecutarlas — para una pieza de portfolio, un repositorio que se levanta en 2 minutos con Docker Compose es más fiable que un despliegue gratuito que se duerme o deja de estar disponible. La estrategia completa queda documentada en `deployment-runbook.md` como ejercicio de criterio, no como acción pendiente.
+
+**Sesión 3 completada: seguridad y casos de error.**
 
 Funciona realmente, verificado con tests automatizados (44 backend + 6 frontend, todos pasando):
 - **Aislamiento multi-tenant probado, no solo asumido**: `tests/Feature/TenantIsolationTest.php` intenta activamente que un usuario de una organización lea/comente/cambie el estado de recursos de otra por ID directo, y comprueba que siempre da 404 (nunca 403, para no confirmar que el recurso existe). `tests/Unit/TenantScopingArchitectureTest.php` impide que un modelo nuevo con `organization_id` se cree sin heredar el aislamiento automático.
@@ -116,7 +122,7 @@ Funciona realmente, verificado con tests automatizados (44 backend + 6 frontend,
 Pendiente / todavía simulado:
 - Gestión de usuarios desde la UI (crear/editar usuarios de tu organización) — no implementado; los usuarios existen vía seeder.
 - El rate limiting de login es por IP, no por cuenta — un ataque distribuido no quedaría cubierto.
-- Documentación de gestión de proyecto (charter, RACI, riesgos, SLO/SLA, runbooks) — Sesión 4.
+- Cobertura de tests ampliada y revisión final de presentación — Sesión 5.
 
 ## Limitaciones conocidas
 
@@ -127,11 +133,23 @@ Pendiente / todavía simulado:
 
 ## Próximos pasos
 
-Ver tabla de sesiones y entregables en la introducción de este proyecto (conversación de planificación) y, a partir de la Sesión 4, en `docs/milestones.md` y `docs/delivery-plan.md`.
+Sesión 5: ampliar cobertura de tests y pulir la presentación final. Ver hitos en [`docs/milestones.md`](docs/milestones.md).
 
 ## Documentación
 
+**Arquitectura y técnica**
 - [`docs/architecture.md`](docs/architecture.md)
 - [`docs/observability.md`](docs/observability.md) — health checks, logs estructurados, manejo de errores
-- [`docs/adr/`](docs/adr/)
-- El resto de documentos de gestión (`docs/project-charter.md`, `docs/scope.md`, `docs/risk-register.md`, `docs/slo.md`, etc.) se añaden en la Sesión 4.
+- [`docs/adr/`](docs/adr/) — registro de decisiones de arquitectura
+- [`docs/diagrams/`](docs/diagrams/) — ciclo de vida de una solicitud, secuencia de notificación asíncrona
+
+**Gestión de proyecto**
+- [`docs/project-charter.md`](docs/project-charter.md) — objetivo de negocio, restricciones, criterios de éxito
+- [`docs/stakeholder-map.md`](docs/stakeholder-map.md) — stakeholders simulados y matriz RACI
+- [`docs/scope.md`](docs/scope.md) — alcance, Definition of Ready/Done, criterios de aceptación
+- [`docs/milestones.md`](docs/milestones.md) · [`docs/delivery-plan.md`](docs/delivery-plan.md) · [`docs/dependencies.md`](docs/dependencies.md)
+- [`docs/risk-register.md`](docs/risk-register.md) — incluye riesgos que se materializaron de verdad, no solo hipotéticos
+
+**Entrega y fiabilidad**
+- [`docs/environment-strategy.md`](docs/environment-strategy.md) · [`docs/deployment-runbook.md`](docs/deployment-runbook.md) · [`docs/rollback-plan.md`](docs/rollback-plan.md) — estrategia documentada, deliberadamente no ejecutada
+- [`docs/slo.md`](docs/slo.md) — SLI/SLO/SLA de ejemplo, error budget, MTTR
